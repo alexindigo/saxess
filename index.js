@@ -1,17 +1,20 @@
 var EventEmitter = require('eventemitter3')
   , partial      = require('lodash.partial')
   , inherits     = require('inherits')
-  , extend       = require('xtend/mutable')
+  , chains       = require('./lib/chains.js')
+  , helpers      = require('./lib/helpers.js')
   ;
 
 // Public API
 module.exports = Saxess;
 
-module.exports.parseError = parseError;
+module.exports.parseError   = helpers.parseError;
+module.exports.collectToken = helpers.collectToken;
+module.exports.updateState  = helpers.updateState;
+module.exports.skipChar     = helpers.skipChar;
 
-module.exports.collectToken = partial(chainsaw, Saxess, collectToken);
-module.exports.updateState  = partial(chainsaw, Saxess, updateState);
-module.exports.skipChar     = partial(chainsaw, Saxess, skipChar);
+// make helper methods chainable
+chains(Saxess);
 
 // defaults
 module.exports.STATE =
@@ -58,24 +61,31 @@ Saxess.prototype.parse = function(string)
   this.code = string.charCodeAt(0);
   this.char = String.fromCharCode(this.code);
 
-  if (!isNaN(this.code))
+  // error
+  if (this.state == Saxess.STATE.ERROR)
   {
-    if (!this.emit(this.code))
-    {
-      this.emit(Saxess.EVENT.CATCHALL, this.char);
-    }
-
-    this.accumulate(this.char);
-
-    this.parse(string.substr(1, string.length));
+    return;
   }
-  else
+
+  // nothing left to parse
+  if (isNaN(this.code))
   {
     // flush leftover chars
     this.collectToken();
     this.state = this.finalState;
     this.emit('end', this.tokens);
+    return;
   }
+
+  // continue
+  if (!this.emit(this.code))
+  {
+    this.emit(Saxess.EVENT.CATCHALL, this.char);
+  }
+
+  this.accumulate(this.char);
+
+  this.parse(string.substr(1, string.length));
 };
 
 /**
@@ -84,9 +94,11 @@ Saxess.prototype.parse = function(string)
  */
 Saxess.prototype.collectToken = function()
 {
-  this.tokens.push(this.acummulator);
-
-  this.acummulator = '';
+  if (this.acummulator.length)
+  {
+    this.tokens.push(this.acummulator);
+    this.acummulator = '';
+  }
 
   return this.tokens[this.tokens.length - 1];
 };
@@ -158,90 +170,18 @@ Saxess.prototype.skipChar = function()
   this.charSkipped = true;
 };
 
-// -- subroutines
-
 /**
  * [parserError description]
  * @param   {[type]} message [description]
  * @param   {[type]} state [description]
- * @returns {function} parse error function
  */
-function parseError(message, state)
+Saxess.prototype.parseError = function(message, state)
 {
-  return function()
+  message    = message || 'Unable to parse ' + this.char + ' (#' + this.code + ') within <' + this.state + '> state.';
+  this.state = state || Saxess.STATE.ERROR;
+
+  if (!this.emit('error', message))
   {
-    message    = message || 'Unable to parse ' + this.char + ' (#' + this.code + ') within <' + this.state + '> state.';
-    this.state = state || Saxess.STATE.ERROR;
-
-    if (!this.emit('error', message))
-    {
-      throw new Error(message);
-    }
-  };
-}
-
-/**
- * [updateState description]
- * @param   {[type]} state [description]
- * @returns {[type]} [description]
- */
-function updateState(state)
-{
-  return state;
-}
-
-/**
- * [skipChar description]
- * @param   {[type]} actions [description]
- */
-function skipChar()
-{
-  this.skipChar();
-}
-
-/**
- * [collectToken description]
- */
-function collectToken()
-{
-  this.collectToken();
-}
-
-/**
- * [chainsaw description]
- * @param   {[type]} collection [description]
- * @param   {[type]} action [description]
- * @returns {[type]} [description]
- */
-function chainsaw(collection, action)
-{
-  var args        = Array.prototype.slice.call(arguments, 2)
-    , localAction = partial.apply(null, [chainsawer, this._chained_actions_, action].concat(args))
-    , chainable   = extend(localAction, collection)
-    ;
-
-  // create queue
-  chainable._chained_actions_ = chainable._chained_actions_ || [];
-  chainable._chained_actions_.push(localAction);
-
-  return chainable;
-}
-
-/**
- * [chainsawer description]
- * @param   {[type]} actions [description]
- * @param   {Function} callback [description]
- * @returns {[type]} [description]
- */
-function chainsawer(actions, callback)
-{
-  var args = Array.prototype.slice.call(arguments, 2);
-
-  // execute queue
-  (actions || []).forEach(function(action)
-  {
-    action.call(this);
-  }.bind(this));
-
-  return callback.apply(this, args);
-}
+    throw new Error(message);
+  }
+};

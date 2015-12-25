@@ -1,0 +1,6 @@
+{
+    "timeout": 2000,
+    "commands": [
+        "**/*.js : npm run debug"
+    ]
+}

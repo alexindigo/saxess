@@ -4,9 +4,9 @@
   "description": "Event-driven string parser (SAX inspired)",
   "main": "index.js",
   "scripts": {
-    "test": "istanbul cover test.js",
+    "test": "istanbul cover test.js -- tests/test-*.js",
     "lint": "eslint *.js lib/*.js tests/*.js",
-    "debug": "node test.js",
+    "debug": "node test.js tests/test-*.js",
     "check": "istanbul check-coverage coverage/coverage.json"
   },
   "repository": {
