@@ -10,8 +10,7 @@ var OK       = false
 var parser = new Saxess();
 
 // clean up
-parser.on('\n', Saxess.skipChar());
-parser.on(' ', Saxess.skipChar());
+parser.on(['\n', ' '], Saxess.skipChar());
 
 parser.on('.', {
   _START_  : Saxess.collectToken().updateState('CLASS')
@@ -53,9 +52,9 @@ parser.on(';', {
   COLOR    : Saxess.collectToken().skipChar().updateState('RULE')
 });
 
-parser.on(Saxess.EVENT.CATCHALL, {
+parser.on([['0', '9'], [65, 90], ['a', 'z']], {
   _START_  : Saxess.collectToken().updateState('TAG'),
-  RULE     : Saxess.collectToken().updateState('KEY'),
+  RULE     : Saxess.collectToken().updateState('KEY')
 });
 
 // error handling

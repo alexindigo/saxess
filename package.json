@@ -9,6 +9,11 @@
     "debug": "node test.js tests/test-*.js",
     "check": "istanbul check-coverage coverage/coverage.json"
   },
+  "pre-commit": [
+    "lint",
+    "test",
+    "check"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alexindigo/saxess.git"

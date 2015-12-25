@@ -112,6 +112,33 @@ Saxess.prototype.collectToken = function()
  */
 Saxess.prototype.addListener = Saxess.prototype.on = function(event, handler, context)
 {
+  // support event sets
+  if (Array.isArray(event))
+  {
+    event.map(function(e)
+    {
+      var a, b, i;
+      // check for ranges
+      if (Array.isArray(e))
+      {
+        // get range codes
+        a = typeof e[0] == 'number' ? e[0] : e[0].charCodeAt(0);
+        b = typeof e[1] == 'number' ? e[1] : e[1].charCodeAt(0);
+
+        // get each and every one of them
+        for (i=a; i<=b; i++)
+        {
+          this.on(i, handler, context);
+        }
+        return;
+      }
+
+      // regular flow
+      this.on(e, handler, context);
+    }.bind(this));
+    return;
+  }
+
   // allow char events,
   // consider multi char as special events
   if (typeof event == 'string' && event.length == 1)
