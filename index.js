@@ -1,8 +1,5 @@
-var EventEmitter = require('eventemitter3')
-  , partial      = require('lodash.partial')
-  , inherits     = require('inherits')
-  , chains       = require('./lib/chains.js')
-  , helpers      = require('./lib/helpers.js')
+var chains  = require('./lib/chains.js')
+  , helpers = require('./lib/helpers.js')
   ;
 
 // Public API
@@ -21,7 +18,8 @@ module.exports.STATE =
 {
   START: '_START_',
   ERROR: '_ERROR_',
-  FINAL: '_FINAL_'
+  FINAL: '_FINAL_',
+  CATCH: '_CATCH_'
 };
 
 module.exports.EVENT =
@@ -29,15 +27,12 @@ module.exports.EVENT =
   CATCHALL: '_CATCHALL_'
 };
 
-// mix in EE methods
-inherits(Saxess, EventEmitter);
-
 /**
  * Creates new instances,
  * allows continuation by passing state and data
  * from another instances
  *
- * @param {[type]} options [description]
+ * @param {object} options [description]
  */
 function Saxess(options)
 {
@@ -49,7 +44,11 @@ function Saxess(options)
   this.acummulator = options.acummulator || '';
   this.charSkipped = options.charSkipped || false;
 
+  // parsed tokens buffer
   this.tokens      = options.tokens || [];
+
+  // reactions storage
+  this.reactions   = {tokens: {}, catchAll: {}};
 }
 
 /**
@@ -104,20 +103,20 @@ Saxess.prototype.collectToken = function()
 };
 
 /**
- * [function description]
+ * Adds event to the list of reactions
+ *
  * @param   {[type]} event [description]
  * @param   {[type]} handler [description]
- * @param   {[type]} context [description]
- * @returns {[type]} [description]
  */
-Saxess.prototype.addListener = Saxess.prototype.on = function(event, handler, context)
+Saxess.prototype.on = function(event, handler)
 {
   // support event sets
   if (Array.isArray(event))
   {
-    event.map(function(e)
+    event.forEach(function(e)
     {
       var a, b, i;
+
       // check for ranges
       if (Array.isArray(e))
       {
@@ -128,13 +127,13 @@ Saxess.prototype.addListener = Saxess.prototype.on = function(event, handler, co
         // get each and every one of them
         for (i=a; i<=b; i++)
         {
-          this.on(i, handler, context);
+          this.on(i, handler);
         }
         return;
       }
 
       // regular flow
-      this.on(e, handler, context);
+      this.on(e, handler);
     }.bind(this));
     return;
   }
@@ -149,31 +148,157 @@ Saxess.prototype.addListener = Saxess.prototype.on = function(event, handler, co
   // allow per state event handlers
   if (typeof handler == 'object')
   {
-    handler = partial(this.emitForState, handler);
+    Object.keys(handler).forEach(function(state)
+    {
+      this.addReaction(event, state, handler[state]);
+    }.bind(this));
+    return;
   }
 
-  return Saxess.super_.prototype.on.call(this, event, handler, context);
+  // generic (catch-all) event handler
+  this.addReaction(event, Saxess.STATE.CATCH, handler);
+};
+
+/**
+ * [function description]
+ * @param   {[type]} token [description]
+ * @param   {[type]} state [description]
+ * @param   {[type]} handler [description]
+ */
+Saxess.prototype.addReaction = function(token, state, handler)
+{
+  // special events
+  if (['error'].indexOf(token) != -1)
+  {
+    this.reactions[token] = handler;
+  }
+
+  // catch all event
+  if (token === Saxess.EVENT.CATCHALL)
+  {
+    if (state === Saxess.STATE.CATCH)
+    {
+      if (this.reactions.catchAll.catchAll)
+      {
+        this.error('Unable to add reaction for [CATCH ALL] token with [CATCH ALL] state. Already exists.');
+        return;
+      }
+
+      this.reactions.catchAll.catchAll = handler;
+      return;
+    }
+
+    if (!('states' in this.reactions.catchAll))
+    {
+      this.reactions.catchAll.states = {};
+    }
+
+    if (state in this.reactions.catchAll.states)
+    {
+      this.error('Unable to add reaction for [CATCH ALL] token with [' + state + '] state. Already exists.');
+      return;
+    }
+
+    this.reactions.catchAll.states[state] = handler;
+    return;
+  }
+
+  if (!(token in this.reactions.tokens))
+  {
+    this.reactions.tokens[token] = {};
+  }
+
+  if (state === Saxess.STATE.CATCH)
+  {
+    if (this.reactions.tokens[token].catchAll)
+    {
+      this.error('Unable to add reaction for [' + token + '] token with [CATCH ALL] state. Already exists.');
+      return;
+    }
+
+    this.reactions.tokens[token].catchAll = handler;
+    return;
+  }
+
+  if (!('states' in this.reactions.tokens[token]))
+  {
+    this.reactions.tokens[token].states = {};
+  }
+
+  if (state in this.reactions.tokens[token].states)
+  {
+    this.error('Unable to add reaction for [' + token + '] token with [' + state + '] state. Already exists.');
+    return;
+  }
+
+  this.reactions.tokens[token].states[state] = handler;
 };
 
 /**
  * [function description]
  *
- * @param   {object} handlers [description]
+ * @param {string|number} event - trigger reaction handler for the current state
+ * @param {...mixed} [args] - extra arguments to pass to the event handler
+ * @returns {boolean} – `true` if token/event-state handler exists and `false` otherwise
  */
-Saxess.prototype.emitForState = function(handlers)
+Saxess.prototype.emit = function(event)
 {
-  var state, args = Array.prototype.slice.call(arguments, 1);
+  var newState, args = Array.prototype.slice.call(arguments, 1);
 
-  if (typeof handlers[this.state] == 'function')
+  // check for matching event handlers
+  if (event in this.reactions)
   {
-    state = handlers[this.state].apply(this, args);
+    this.reactions[event].apply(this, args);
+    return true;
+  }
+
+  // check for tokens
+  if (event in this.reactions.tokens)
+  {
+    if (this.reactions.tokens[event].states && (this.state in this.reactions.tokens[event].states))
+    {
+      newState = this.reactions.tokens[event].states[this.state].apply(this, args);
+    }
+    else if (this.reactions.tokens[event].catchAll)
+    {
+      newState = this.reactions.tokens[event].catchAll.apply(this, args);
+    }
+    // didn't match anything
+    else
+    {
+      return false;
+    }
 
     // if returned something, use it as new state value
-    if (typeof state != 'undefined')
+    if (typeof newState != 'undefined')
     {
-      this.state = state;
+      this.state = newState;
     }
+
+    return true;
   }
+
+  // check for catch all handlers
+  if (this.reactions.catchAll.states && (this.state in this.reactions.catchAll.states))
+  {
+    newState = this.reactions.catchAll.states[this.state].apply(this, args);
+
+    // if returned something, use it as new state value
+    if (typeof newState != 'undefined')
+    {
+      this.state = newState;
+    }
+
+    return true;
+  }
+  else if (this.reactions.catchAll.catchAll)
+  {
+    this.reactions.catchAll.catchAll.apply(this, args);
+    return true;
+  }
+
+  // nothing left
+  return false;
 };
 
 /**
@@ -204,7 +329,18 @@ Saxess.prototype.skipChar = function()
  */
 Saxess.prototype.parseError = function(message, state)
 {
-  message    = message || 'Unable to parse ' + this.char + ' (#' + this.code + ') within <' + this.state + '> state.';
+  message = message || 'Unable to parse ' + this.char + ' (#' + this.code + ') within <' + this.state + '> state.';
+  this.error(message, state);
+};
+
+/**
+ * Generic error funnel
+ *
+ * @param   {string} [message] - error message
+ * @param   {string} [state] - custom error state
+ */
+Saxess.prototype.error = function(message, state)
+{
   this.state = state || Saxess.STATE.ERROR;
 
   if (!this.emit('error', message))
