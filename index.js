@@ -44,10 +44,10 @@ function Saxess(options)
 }
 
 // Add events/reactions handling
-Saxess.prototype.on          = reactions.on;
+Saxess.prototype.on          = reactions.addListener;
 Saxess.prototype.addListener = reactions.addListener;
 Saxess.prototype.addReaction = reactions.addReaction;
-Saxess.prototype.emit        = reactions.emit;
+Saxess.prototype.trigger     = reactions.trigger;
 
 /**
  * [function description]
@@ -70,12 +70,12 @@ Saxess.prototype.parse = function(string)
     // flush leftover chars
     this.collectToken();
     this.state = this.finalState;
-    this.emit('end', this.tokens);
+    this.trigger('end', this.tokens);
     return;
   }
 
   // report next char
-  this.emit(this.code);
+  this.trigger(this.code);
 
   // and store it
   this.accumulate(this.char);
@@ -141,7 +141,7 @@ Saxess.prototype.error = function(message, state)
 {
   this.state = state || defaults.STATE.ERROR;
 
-  if (!this.emit('error', message))
+  if (!this.trigger('error', message))
   {
     throw new Error(message);
   }
