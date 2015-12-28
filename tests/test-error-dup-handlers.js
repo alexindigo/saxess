@@ -9,7 +9,7 @@ parser.on('error', function(message)
 {
   OK = true;
   console.log('+ FAILED expectedly:', message);
-  assert.equal(message, 'Unable to add reaction for [120] token with [state] state. Already exists.');
+  assert.equal(message, 'Unable to add reaction for [120|"x"] token with [state] state. Already exists.');
 });
 
 // duplicated events

@@ -7,8 +7,8 @@ var str = 'abc.def[ghi.jkl]mno.pqr[st[[uv]]wx].yz.[123].456.[]]boom.v]room[[]her
 // last event with one-for-all handler
 parser.on('end', function(tokens)
 {
-  console.log('! DONE:', JSON.stringify(tokens));
-  console.log('But should not get here');
+  console.log('! NOT OK, POINTER TOKENS:', JSON.stringify(tokens));
+  console.log('Failed, expected to throw at malformed pointer.');
   console.trace();
   assert.fail();
 });

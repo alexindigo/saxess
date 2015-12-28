@@ -1,5 +1,4 @@
-var chains    = require('./lib/chains.js')
-  , helpers   = require('./lib/helpers.js')
+var helpers   = require('./lib/helpers.js')
   , defaults  = require('./lib/defaults.js')
   , reactions = require('./lib/reactions.js')
   ;
@@ -7,13 +6,11 @@ var chains    = require('./lib/chains.js')
 // Public API
 module.exports = Saxess;
 
-module.exports.parseError   = helpers.parseError;
-module.exports.collectToken = helpers.collectToken;
-module.exports.updateState  = helpers.updateState;
-module.exports.skipChar     = helpers.skipChar;
-
-// make helper methods chainable
-chains(Saxess);
+module.exports.parseError     = helpers.parseError;
+module.exports.collectToken   = helpers.collectToken;
+module.exports.updateState    = helpers.updateState;
+module.exports.skipChar       = helpers.skipChar;
+module.exports.reevaluateChar = helpers.reevaluateChar;
 
 // export defaults
 module.exports.STATE = defaults.STATE;
@@ -31,10 +28,12 @@ function Saxess(options)
   options = options || {};
 
   this.state       = options.state || defaults.STATE.START;
+  this.startState  = this.state;
   this.finalState  = options.finalState || defaults.STATE.FINAL;
 
   this.acummulator = options.acummulator || '';
   this.charSkipped = options.charSkipped || false;
+  this.charReevaluated = options.charReevaluated || false;
 
   // parsed tokens buffer
   this.tokens      = options.tokens || [];
@@ -80,18 +79,40 @@ Saxess.prototype.parse = function(string)
   // and store it
   this.accumulate(this.char);
 
-  // go to the next one
-  this.parse(string.substr(1, string.length));
+  if (this.charReevaluated)
+  {
+    this.charReevaluated = false;
+    // try one more time
+    this.parse(string);
+  }
+  else
+  {
+    // go to the next one
+    this.parse(string.substr(1, string.length));
+  }
 };
 
 /**
  * [function description]
- * @returns {[type]} [description]
+ * @param   {string} forceToken - token to forcibly separate from accumulator
+ * @returns {string} last token in the set
  */
-Saxess.prototype.collectToken = function()
+Saxess.prototype.collectToken = function(forceToken)
 {
   if (this.acummulator.length)
   {
+    // if there is nothing else to `acummulator` than `forceToken`
+    // don't bother, otherwise, create two separate tokens
+    // only if `acummulator` actually contains `forceToken` as the last part
+    if (forceToken
+      && this.acummulator.length > forceToken.length
+      && this.acummulator.substr(forceToken.length * -1) === forceToken)
+    {
+      // strip part before `forceToken` and let normal flow take care of the rest
+      this.tokens.push(this.acummulator.slice(0, forceToken.length * -1));
+      this.acummulator = forceToken;
+    }
+
     this.tokens.push(this.acummulator);
     this.acummulator = '';
   }
@@ -118,6 +139,11 @@ Saxess.prototype.accumulate = function(char)
 Saxess.prototype.skipChar = function()
 {
   this.charSkipped = true;
+};
+
+Saxess.prototype.reevaluateChar = function()
+{
+  this.charReevaluated = true;
 };
 
 /**

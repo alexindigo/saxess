@@ -10,7 +10,10 @@ var OK       = false
 var parser = new Saxess();
 
 // clean up
-parser.on(['\n', ' '], Saxess.skipChar());
+parser.on(['\n', ' '], {
+  VALUE     : Saxess.collectToken().skipChar(),
+  _CATCHALL_: Saxess.skipChar()
+});
 
 parser.on('.', {
   _START_  : Saxess.collectToken().updateState('CLASS')
@@ -21,12 +24,13 @@ parser.on('#', {
 });
 
 parser.on('{', {
-  ID   : Saxess.collectToken().updateState('RULE'),
-  CLASS: Saxess.collectToken().updateState('RULE'),
-  TAG  : Saxess.collectToken().updateState('RULE')
+  ID     : Saxess.collectToken().updateState('RULE'),
+  CLASS  : Saxess.collectToken().updateState('RULE'),
+  TAG    : Saxess.collectToken().updateState('RULE'),
+  PSEUDO : Saxess.collectToken().updateState('RULE'),
+  ATTR   : Saxess.collectToken().updateState('RULE')
 });
 
-// TODO: Make parseError default when no state handler found
 parser.on('}', {
   _START_  : Saxess.parseError(),
   ID       : Saxess.parseError(),
@@ -34,12 +38,27 @@ parser.on('}', {
   KEY      : Saxess.parseError(),
   VALUE    : Saxess.parseError(),
 
-  RULE     : Saxess.updateState('_START_')
+  RULE     : Saxess.collectToken().updateState('_START_')
 });
 
 parser.on(':', {
-  _START_  : Saxess.parseError(),
   RULE     : Saxess.parseError(),
+
+  _START_  : Saxess.collectToken().updateState('PSEUDO'),
+  CLASS    : Saxess.collectToken().updateState('PSEUDO'),
+  ID       : Saxess.collectToken().updateState('PSEUDO'),
+  TAG      : Saxess.collectToken().updateState('PSEUDO'),
+
+  KEY      : Saxess.collectToken().skipChar().updateState('VALUE')
+});
+
+parser.on('[', {
+  RULE     : Saxess.parseError(),
+
+  _START_  : Saxess.collectToken().updateState('ATTR'),
+  CLASS    : Saxess.collectToken().updateState('ATTR'),
+  ID       : Saxess.collectToken().updateState('ATTR'),
+  TAG      : Saxess.collectToken().updateState('ATTR'),
 
   KEY      : Saxess.collectToken().skipChar().updateState('VALUE')
 });
@@ -48,13 +67,18 @@ parser.on(';', {
   _START_  : Saxess.parseError(),
   RULE     : Saxess.parseError(),
 
-  VALUE    : Saxess.collectToken().skipChar().updateState('RULE'),
-  COLOR    : Saxess.collectToken().skipChar().updateState('RULE')
+  VALUE    : Saxess.collectToken().updateState('RULE'),
+  COLOR    : Saxess.collectToken().updateState('RULE')
 });
 
 parser.on([['0', '9'], [65, 90], ['a', 'z']], {
   _START_  : Saxess.collectToken().updateState('TAG'),
   RULE     : Saxess.collectToken().updateState('KEY')
+});
+
+// match word, and get back to the `TAG` state
+parser.on([['data-role']], {
+  ATTR: Saxess.collectToken().updateState('ATTR')
 });
 
 // error handling
@@ -69,7 +93,7 @@ parser.on('error', function(message)
 parser.on('end', function(tokens)
 {
   OK = true;
-  console.log('+ DONE:', JSON.stringify(tokens));
+  console.log('+ OK, CSS TOKENS:', JSON.stringify(tokens));
   assert.deepEqual(tokens, expected);
 });
 

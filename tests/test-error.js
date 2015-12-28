@@ -15,8 +15,8 @@ parser.on('error', function(message)
 // last event with one-for-all handler
 parser.on('end', function(tokens)
 {
-  console.log('! DONE:', JSON.stringify(tokens));
-  console.log('But should not get here');
+  console.log('! NOT OK, POINTER TOKENS:', JSON.stringify(tokens));
+  console.log('Failed, expected to trigger error event at malformed pointer and cancel parsing.');
   console.trace();
   assert.fail();
 });

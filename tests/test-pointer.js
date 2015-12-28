@@ -17,7 +17,7 @@ parser.on('error', function(message)
 parser.on('end', function(tokens)
 {
   OK = true;
-  console.log('+ DONE:', JSON.stringify(tokens));
+  console.log('+ OK, POINTER TOKENS:', JSON.stringify(tokens));
   assert.deepEqual(tokens, expected);
 });
 
