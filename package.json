@@ -38,7 +38,7 @@
     "pre-commit": "^1.1.2"
   },
   "dependencies": {
-    "lodash.partial": "^4.2.0",
+    "lodash.partial": "^4.2.1",
     "xtend": "^4.0.1"
   }
 }
